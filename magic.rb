@@ -165,11 +165,11 @@ end
 
 
 
-testing = pandiagonal_square(17)
+testing = pandiagonal_square(7)
 population = {}
 
 done = false
-max_pop = 300
+max_pop = 100
 numeric_range = 5
 vertex_count = testing.values.flatten.max
 mu = 3.0/vertex_count
