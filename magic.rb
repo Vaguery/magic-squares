@@ -28,7 +28,7 @@ def pandiagonal_square(edge_size)
   return result
 end
 
-def pretty_matrix(assignment)
+def pretty_square_matrix(assignment)
   rows = assignment.values.each_slice(Math.sqrt(assignment.length)).to_a
   width = rows.flatten.max.to_s.size+3
   rows.map { |a| a.map { |i| i.to_s.rjust(width) }.join }
@@ -42,11 +42,7 @@ end
 
 @basic_4x4_square = basic_square(4)
 
-@pandiagonal_4x4_square =
-  {r1: [1,2,3,4], r2: [5,6,7,8], r3: [9,10,11,12], r4: [13,14,15,16],
-   c1: [1,5,9,13], c2: [2,6,10,14], c3: [3,7,11,15], c4: [4,8,12,16],
-   d1: [1,6,11,16], d2: [2,7,12,13], d3: [3,8,9,14], d4: [4,6,11,15],
-   d5: [4,7,10,13], d6: [3,6,9,16], d7: [2,5,12,15], d8: [1,8,11,14]}
+@pandiagonal_4x4_square = pandiagonal_square(4)
 
 @slipped_3x3_nonsquare =
   {l1: [1,2,3], l2: [4,5,6], l3: [11,7,8,9],
@@ -169,12 +165,12 @@ end
 
 
 
-testing = @rect_4x5_4x_diags
+testing = pandiagonal_square(17)
 population = {}
 
 done = false
 max_pop = 300
-numeric_range = 3
+numeric_range = 5
 vertex_count = testing.values.flatten.max
 mu = 3.0/vertex_count
 
@@ -197,14 +193,14 @@ mu = 3.0/vertex_count
       winners = population.select {|k,v| k[:total] == 0.0}
       puts "winners:"
       winners.each do |k,v|
-        puts pretty_matrix(v)
+        puts pretty_square_matrix(v)
         puts k.inspect
         puts
       end
     end
     variants = population.collect do |k,v|
       rand() < 0.5 ?
-        tweak_direct_assignment(v, v.length, mu) :
+        tweak_direct_assignment(v, 10, mu) :
         swapN(v,rand(vertex_count/2)+2)
     end
     variants.each do |k|
@@ -212,6 +208,6 @@ mu = 3.0/vertex_count
       population[k_error] = k unless
         (k.values.uniq.count < k.count) #|| (k_error[:total] > median_error)
     end
-    puts "#{i},#{min_error},#{median_error},#{max_error},#{population.length},#{population.select {|k,v| k[:total] == min_error}.to_a[0][1].values.join(",")}" if (i%10 == 0)
+    puts "#{i},#{min_error},#{median_error},#{max_error},#{population.length}" if (i%10 == 0)
   end
 end
