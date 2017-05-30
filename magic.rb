@@ -53,6 +53,25 @@ end
    l4: [1,4,10,11,12,13], l5: [12,2,5,8], l6: [13,3,6,9],
    l7: [1,5,9], l8: [10,7,5,3]}
 
+@slipped_3x3_nonsquare_rotated_center =
+  {l1: [1,2,3,4], l2: [6,7,8], l3: [10,11,12,13],
+   l4: [2,5,6,10], l5: [3,7,11], l6: [4,8,9,12],
+   l7: [1,5,7,9,13], l8:[4,7,10]}
+
+@rect_3x4_no_diags =
+  {r1: [1,2,3,4], r2: [5,6,7,8], r3: [9,10,11,12],
+   c1: [1,5,9], c2: [2,6,10], c3: [3,7,11], c4: [4,8,12]}
+
+@rect_3x4_4x_diags =
+  {r1: [1,2,3,4], r2: [5,6,7,8], r3: [9,10,11,12],
+   c1: [1,5,9], c2: [2,6,10], c3: [3,7,11], c4: [4,8,12],
+   d1: [1,6,11], d2: [2,7,12], d3: [3,6,9], d4: [4,7,10]}
+
+@rect_4x5_4x_diags =
+  {r1: [1,2,3,4,5], r2: [6,7,8,9,10], r3: [11,12,13,14,15], r4: [16,17,18,19,20],
+   c1: [1,6,11,16], c2: [2,7,12,17], c3: [3,8,13,18], c4: [4,9,14,19], c5: [5,10,15,20],
+   d1: [1,7,13,19], d2: [2,8,14,20], d3: [4,8,12,16], d4: [5,9,13,17]}
+
 
 def random_keys(size)
   h = {}
@@ -90,10 +109,11 @@ def mutate(keys, prob)
   return mutant
 end
 
-def tweak_direct_assignment(a,prob)
+
+def tweak_direct_assignment(a,scale,prob)
   mutant = {}
   a.each do |k,v|
-    mutant[k] = (rand() <= prob) ? v + rand(3) - 1 : v
+    mutant[k] = (rand() <= prob) ? v + rand(2*scale) - scale : v
   end
   return mutant
 end
@@ -104,11 +124,11 @@ def crossover(p1,p2)
   return child
 end
 
-def swap3(a)
-  which = a.keys.sample(3)
+def swapN(a,n)
+  which = a.keys.sample(n)
   into = which.rotate
   mutant = a.dup
-  (0...3).each do |i|
+  (0...n).each do |i|
     mutant[into[i]] = a[which[i]]
   end
   return mutant
@@ -125,69 +145,73 @@ def sums(hypergraph,assignment)
 end
 
 
-def products(hypergraph,assignment)
-  allproducts = {}
-  hypergraph.each do |line,items|
-    allproducts[line]=items.reduce(1) {|prod,i| prod * assignment[i]}
-  end
-  allproducts[:total] = allproducts.values.reduce(:+)
-  return allproducts
-end
-
-
-def total_sum_error(sums)
+def total_error_hash(hypergraph,answer)
+  sums = sums(hypergraph,answer)
   c = sums.count
-  target = sums[:total].to_f/(c-1)
-  sums.reduce(0) {|tot,(k,v)| k == :total ? tot : (tot + (v-target).abs) }
+  target_error = sums[:total].to_f/(c-1)
+  error_hash = sums.reduce({}) do |errs,(k,v)|
+    errs[k] = (k == :total ? 0.0 : (v-target_error).to_f.abs)
+    errs
+  end
+  error_hash[:total] = error_hash.values.reduce(:+)
+  return error_hash
 end
 
-def total_product_error(products)
-  c = products.count
-  target = products[:total].to_f/(c-1)
-  products.reduce(0) {|tot,(k,v)| k == :total ? tot : (tot + (v-target).abs) }
+
+def rough_lexicase_selection(pop,target_size)
+  until pop.length <= target_size
+    which_key = pop.keys.first.keys.sample
+    worst_score = pop.keys.collect {|k| k[which_key]}.max
+    pop = pop.select {|k,v| k[which_key] < worst_score}
+  end
+  return pop
 end
 
 
 
-testing = pandiagonal_square(9)
+testing = @rect_4x5_4x_diags
 population = {}
 
 done = false
-mu = 0.1
-max_pop = 500
-numeric_range = 5
+max_pop = 300
+numeric_range = 3
 vertex_count = testing.values.flatten.max
+mu = 3.0/vertex_count
 
-20000.times do |i|
+
+
+100000.times do |i|
   unless done
-    population = (population.to_a.sort_by {|kv| kv[1]})[0,max_pop].to_h
-    (max_pop).times do
-      k = random_direct_assignment(vertex_count,vertex_count*numeric_range)
-      population[k] = total_sum_error(sums(testing,k))
+    (2).times do
+      v = random_direct_assignment(vertex_count,vertex_count*numeric_range)
+      population[total_error_hash(testing,v)] = v
     end
+    population = rough_lexicase_selection(population,max_pop)
     # puts population.inspect
-    min_error = population.values.min
-    median_error = population.values.sort[population.length/2]
-    max_error = population.values.max
+    totals = population.keys.collect {|e| e[:total]}
+    min_error = totals.min
+    median_error = totals.sort[population.length/2]
+    max_error = totals.max
     if min_error == 0.0
       done = true
-      winners = population.select {|k,v| v == 0.0}
+      winners = population.select {|k,v| k[:total] == 0.0}
       puts "winners:"
       winners.each do |k,v|
-        puts pretty_matrix(k)
+        puts pretty_matrix(v)
+        puts k.inspect
         puts
       end
     end
-    variants = (0..max_pop).collect do
-      p1 = population.keys.sample(1)
+    variants = population.collect do |k,v|
       rand() < 0.5 ?
-        tweak_direct_assignment(p1[0],mu) :
-        swap3(p1[0])
+        tweak_direct_assignment(v, v.length, mu) :
+        swapN(v,rand(vertex_count/2)+2)
     end
     variants.each do |k|
-      k_error = total_sum_error(sums(testing,k))
-      population[k] = k_error unless (k.values.uniq.count < k.count) || (k_error > median_error)
+      k_error = total_error_hash(testing,k)
+      population[k_error] = k unless
+        (k.values.uniq.count < k.count) #|| (k_error[:total] > median_error)
     end
-    puts "#{i},#{min_error},#{median_error},#{max_error},#{population.length}"
+    puts "#{i},#{min_error},#{median_error},#{max_error},#{population.length},#{population.select {|k,v| k[:total] == min_error}.to_a[0][1].values.join(",")}" if (i%10 == 0)
   end
 end
